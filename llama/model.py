@@ -30,7 +30,7 @@ class ModelArgs:
 
     max_batch_size: int = 32
     max_seq_len: int = 2048
-
+    use_scaled_rope: bool = True
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
@@ -216,7 +216,10 @@ class FeedForward(nn.Module):
         )
 
     def forward(self, x):
+        # print(self.w2(F.silu(self.w1(x)) * self.w3(x)))
         return self.w2(F.silu(self.w1(x)) * self.w3(x))
+        # return self.w2(F.relu(self.w1(x)))
+        # print(self.w2(F.silu(self.w1(x)) * self.w3(x)))
 
 
 class TransformerBlock(nn.Module):

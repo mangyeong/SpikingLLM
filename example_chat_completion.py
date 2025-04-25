@@ -6,11 +6,24 @@ from typing import List, Optional
 import fire
 
 from llama import Dialog, Llama
+import os
+
+
+########################################################
+os.environ["RANK"] = "0"
+os.environ["WORLD_SIZE"] = "1"
+os.environ["MASTER_ADDR"] = "localhost"
+os.environ["MASTER_PORT"] = "29500"
+########################################################
+
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["NCCL_P2P_DISABLE"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]='1'
 
 
 def main(
-    ckpt_dir: str,
-    tokenizer_path: str,
+    ckpt_dir="/home/mangyeong/.llama/checkpoints/Llama3.2-1B-Instruct/",
+    tokenizer_path = "/home/mangyeong/.llama/checkpoints/Llama3.2-1B-Instruct/tokenizer.model",
     temperature: float = 0.6,
     top_p: float = 0.9,
     max_seq_len: int = 512,

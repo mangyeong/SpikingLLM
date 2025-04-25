@@ -184,6 +184,7 @@ class Tokenizer:
         current_slice_is_space = s[0].isspace() if len(s) > 0 else False
         slice_start = 0
 
+
         for i in range(len(s)):
             is_now_space = s[i].isspace()
 
@@ -196,6 +197,7 @@ class Tokenizer:
                     yield s[slice_start:i]
                     slice_start = i
                     current_slice_len = 1
+            # print(s[i])
         yield s[slice_start:]
 
 
