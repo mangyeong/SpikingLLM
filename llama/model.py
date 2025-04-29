@@ -18,19 +18,39 @@ from torch import nn
 
 @dataclass
 class ModelArgs:
-    dim: int = 2048
-    n_layers: int = 16
-    n_heads: int = 32
-    n_kv_heads: Optional[int] = 8
+
+    ##8B
+    dim: int = 4096
+    n_layers: int = 32
+    n_heads: int = 32  # Number of heads for the queries
+    n_kv_heads: Optional[int] = 8  # Number of heads for the K and V
     vocab_size: int = 128256
-    multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
-    ffn_dim_multiplier: Optional[float] = None
+    multiple_of: int = 1024  # make SwiGLU hidden layer size multiple of large power of 2
+    ffn_dim_multiplier: Optional[float] = 1.3
     norm_eps: float = 1e-5
     rope_theta: float = 500000
 
+    # Needed for KV cache
     max_batch_size: int = 32
     max_seq_len: int = 2048
     use_scaled_rope: bool = True
+
+    ##1B
+    # dim: int = 2048
+    # n_layers: int = 16
+    # n_heads: int = 32 # Number of heads for the queries
+    # n_kv_heads: Optional[int] = 8 # Number of heads for the K and V
+    # vocab_size: int = 128256
+    # multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
+    # ffn_dim_multiplier: Optional[float] = None
+    # norm_eps: float = 1e-5
+    # rope_theta: float = 500000
+    #
+    # #Needed for KV cache
+    # max_batch_size: int = 32
+    # max_seq_len: int = 2048
+    # use_scaled_rope: bool = True
+
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
@@ -203,10 +223,11 @@ class FeedForward(nn.Module):
         ffn_dim_multiplier: Optional[float],
     ):
         super().__init__()
-        # hidden_dim = int(2 * hidden_dim / 3)
+        hidden_dim = int(2 * hidden_dim / 3) ##ffn_dim_multiplier
+        # hidden_dim = int(hidden_dim / 2)
         # custom dim factor multiplier
-        # if ffn_dim_multiplier is not None:
-        #     hidden_dim = int(ffn_dim_multiplier * hidden_dim)
+        if ffn_dim_multiplier is not None: ##ffn_dim_multiplier
+            hidden_dim = int(ffn_dim_multiplier * hidden_dim)
         hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
 
         self.w1 = ColumnParallelLinear(
@@ -220,10 +241,8 @@ class FeedForward(nn.Module):
         )
 
     def forward(self, x):
-        # print(self.w2(F.silu(self.w1(x)) * self.w3(x)))
-        return self.w2(F.silu(self.w1(x)) * self.w3(x))
-        # return self.w2(F.relu(self.w1(x)))
-        # print(self.w2(F.silu(self.w1(x)) * self.w3(x)))
+        return self.w2(F.relu(self.w1(x)) * self.w3(x))
+        # return self.w2(F.silu(self.w1(x)) * self.w3(x))
 
 
 class TransformerBlock(nn.Module):
@@ -280,6 +299,7 @@ class Transformer(nn.Module):
             params.max_seq_len * 2,
             params.rope_theta,
         )
+
 
     def forward(self, tokens: torch.Tensor, start_pos: int):
         _bsz, seqlen = tokens.shape
