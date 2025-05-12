@@ -8,6 +8,8 @@ from typing import Optional, Tuple
 import fairscale.nn.model_parallel.initialize as fs_init
 import torch
 import torch.nn.functional as F
+from typing import Optional, Tuple, Union, Callable
+
 from fairscale.nn.model_parallel.layers import (
     ColumnParallelLinear,
     RowParallelLinear,
@@ -20,20 +22,20 @@ from torch import nn
 class ModelArgs:
 
     ##8B
-    dim: int = 4096
-    n_layers: int = 32
-    n_heads: int = 32  # Number of heads for the queries
-    n_kv_heads: Optional[int] = 8  # Number of heads for the K and V
-    vocab_size: int = 128256
-    multiple_of: int = 1024  # make SwiGLU hidden layer size multiple of large power of 2
-    ffn_dim_multiplier: Optional[float] = 1.3
-    norm_eps: float = 1e-5
-    rope_theta: float = 500000
-
-    # Needed for KV cache
-    max_batch_size: int = 32
-    max_seq_len: int = 2048
-    use_scaled_rope: bool = True
+    # dim: int = 4096
+    # n_layers: int = 32
+    # n_heads: int = 32  # Number of heads for the queries
+    # n_kv_heads: Optional[int] = 8  # Number of heads for the K and V
+    # vocab_size: int = 128256
+    # multiple_of: int = 1024  # make SwiGLU hidden layer size multiple of large power of 2
+    # ffn_dim_multiplier: Optional[float] = 1.3
+    # norm_eps: float = 1e-5
+    # rope_theta: float = 500000
+    #
+    # # Needed for KV cache
+    # max_batch_size: int = 32
+    # max_seq_len: int = 2048
+    # use_scaled_rope: bool = True
 
     ##1B
     # dim: int = 2048
@@ -42,7 +44,7 @@ class ModelArgs:
     # n_kv_heads: Optional[int] = 8 # Number of heads for the K and V
     # vocab_size: int = 128256
     # multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
-    # ffn_dim_multiplier: Optional[float] = None
+    # ffn_dim_multiplier: Optional[float] = 1.5
     # norm_eps: float = 1e-5
     # rope_theta: float = 500000
     #
@@ -50,6 +52,41 @@ class ModelArgs:
     # max_batch_size: int = 32
     # max_seq_len: int = 2048
     # use_scaled_rope: bool = True
+
+    #3B
+    # dim: int = 3072
+    # n_layers: int = 28
+    # n_heads: int = 24  # Number of heads for the queries
+    # n_kv_heads: Optional[int] = 8  # Number of heads for the K and V
+    # vocab_size: int = 128256
+    # multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
+    # ffn_dim_multiplier: Optional[float] = 1.0
+    # norm_eps: float = 1e-5
+    # rope_theta: float = 500000
+    # activation_function = "relu"
+    #
+    # # Needed for KV cache
+    # max_batch_size: int = 32
+    # max_seq_len: int = 2048
+    # use_scaled_rope: bool = True
+
+    #
+    dim: int
+    n_layers: int
+    n_heads: int   # Number of heads for the queries
+    n_kv_heads: Optional[int]  # Number of heads for the K and V
+    vocab_size: int
+    multiple_of: int # make SwiGLU hidden layer size multiple of large power of 2
+    ffn_dim_multiplier: Optional[float]
+    norm_eps: float
+    rope_theta: float
+
+    # Needed for KV cache
+    max_batch_size: int
+    max_seq_len: int
+    use_scaled_rope: bool
+
+    activation_function: str
 
 
 class RMSNorm(torch.nn.Module):
@@ -221,6 +258,7 @@ class FeedForward(nn.Module):
         hidden_dim: int,
         multiple_of: int,
         ffn_dim_multiplier: Optional[float],
+        activation: Union[str, Callable]
     ):
         super().__init__()
         hidden_dim = int(2 * hidden_dim / 3) ##ffn_dim_multiplier
@@ -229,6 +267,12 @@ class FeedForward(nn.Module):
         if ffn_dim_multiplier is not None: ##ffn_dim_multiplier
             hidden_dim = int(ffn_dim_multiplier * hidden_dim)
         hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
+
+        if isinstance(activation, str):
+            act_name = activation.lower()
+            self.act_fn = F.relu if act_name == "relu" else F.silu
+        else:
+            self.act_fn = activation
 
         self.w1 = ColumnParallelLinear(
             dim, hidden_dim, bias=False, gather_output=False, init_method=lambda x: x
@@ -241,8 +285,9 @@ class FeedForward(nn.Module):
         )
 
     def forward(self, x):
-        return self.w2(F.relu(self.w1(x)) * self.w3(x))
-        # return self.w2(F.silu(self.w1(x)) * self.w3(x))
+        # return self.w2(F.relu(self.w1(x)) * self.w3(x))
+        # print(self.act_fn
+        return self.w2(self.act_fn(self.w1(x)) * self.w3(x))
 
 
 class TransformerBlock(nn.Module):
@@ -257,6 +302,7 @@ class TransformerBlock(nn.Module):
             hidden_dim=4 * args.dim,
             multiple_of=args.multiple_of,
             ffn_dim_multiplier=args.ffn_dim_multiplier,
+            activation = args.activation_function
         )
         self.layer_id = layer_id
         self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
@@ -300,6 +346,11 @@ class Transformer(nn.Module):
             params.rope_theta,
         )
 
+        act_name = getattr(params, "activation_function", "silu").lower()
+        if act_name == "relu":
+            self.act_fn = torch.nn.ReLU()
+        else:
+            self.act_fn = torch.nn.SiLU()
 
     def forward(self, tokens: torch.Tensor, start_pos: int):
         _bsz, seqlen = tokens.shape

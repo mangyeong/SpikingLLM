@@ -151,6 +151,27 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+calc_acc_char.py
+llama/apply_r3_r4.py
+llama/generation_all.py
+llama/hadamard_utils.py
+llama/model_for_all_type.py
+llama/qlora_utils.py
+llama/spinquant_eval_utils.py
+llama/spinquant_utils.py
+relu_finetuned_3B-1/
+silu_finetuned_3B-1/
+llama/utils.py
+lm-evaluation-harness/
+main.py
+transformers/
+datasets_down.py
+data.tar
+
+
+
+
+
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

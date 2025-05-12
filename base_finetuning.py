@@ -84,10 +84,10 @@ def train(model, loader, optimizer, scheduler, device, num_epochs=3, grad_accum_
 # Main entry point
 
 def main():
-    ckpt_dir = "/home/mangyeong/.llama/checkpoints/Llama3.1-8B"
-    tok_path = "/home/mangyeong/.llama/checkpoints/Llama3.1-8B/tokenizer.model"
+    ckpt_dir = "/home/mangyeong/.llama/checkpoints/Llama3.2-1B"
+    tok_path = "/home/mangyeong/.llama/checkpoints/Llama3.2-1B/tokenizer.model"
     max_seq_len = 512
-    batch_size = 1
+    batch_size = 16
     grad_accum_steps = 4
     num_epochs = 3
     lr = 3e-5
@@ -104,6 +104,7 @@ def main():
     torch.set_default_dtype(torch.float32)
 
     model = llama.model.cuda()
+    # model = torch.nn.DataParallel(model, device_ids=[0,1])
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     tokenizer = llama.tokenizer

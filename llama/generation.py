@@ -39,8 +39,10 @@ class Llama:
         tokenizer_path: str,
         max_seq_len: int,
         max_batch_size: int,
+        activation_function: str = "silu",
         model_parallel_size: Optional[int] = None,
         seed: int = 1,
+        gpu: int = 0,
     ) -> "Llama":
         """
         Build a Llama instance by initializing and loading a model checkpoint.
@@ -95,9 +97,11 @@ class Llama:
         with open(Path(ckpt_dir) / "params.json", "r") as f:
             params = json.loads(f.read())
 
+        act_fn = params.pop("activation_function","silu")
         model_args: ModelArgs = ModelArgs(
             max_seq_len=max_seq_len,
             max_batch_size=max_batch_size,
+            activation_function=act_fn,
             **params,
         )
         tokenizer = Tokenizer(model_path=tokenizer_path)
@@ -122,8 +126,8 @@ class Llama:
         self,
         prompt_tokens: List[List[int]],
         max_gen_len: int,
-        temperature: float = 0.6,
-        top_p: float = 0.9,
+        temperature: float = 0,
+        top_p: float = 1.0,
         logprobs: bool = False,
         echo: bool = False,
     ) -> Tuple[List[List[int]], Optional[List[List[float]]]]:
